@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="pl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#0e1014" />
+    <meta name="description" content="Prywatny dziennik treningu siłowego." />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Trening" />
+    <meta name="format-detection" content="telephone=no" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" type="image/png" sizes="64x64" href="./icons/favicon-64.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png" />
+    <title>Mój trening</title>
+  </head>
+  <body>
+    <div id="app" class="app">
+      <main id="main" class="main" tabindex="-1"></main>
+      <div id="rest" class="rest" hidden></div>
+      <nav id="nav" class="nav" aria-label="Zakładki"></nav>
+    </div>
+    <div id="toasts" class="toasts" aria-live="polite"></div>
+    <div id="sheets"></div>
+    <noscript>Ta aplikacja wymaga JavaScriptu.</noscript>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>
