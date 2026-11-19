@@ -1,4 +1,4 @@
-import { h } from '../util';
+import { h, icon } from '../util';
 
 /**
  * Arkusz wysuwany od dołu.
@@ -13,6 +13,18 @@ export interface SheetHandle {
 
 interface SheetOptions {
   title?: string;
+  /** Mały nadtytuł nad tytułem (np. „PODSUMOWANIE SESJI”). */
+  eyebrow?: string;
+  /** Podtytuł pod tytułem. */
+  subtitle?: string;
+  /** Element po lewej stronie tytułu (np. ikona kategorii). */
+  leading?: HTMLElement;
+  /** Element obok tytułu (np. pigułka „Następny”). */
+  titleAside?: HTMLElement | null;
+  /** Przycisk ✕ w nagłówku (domyślnie, gdy jest tytuł). */
+  closeButton?: boolean;
+  /** Arkusz akcji iOS: pływająca grupa przycisków zamiast pełnego arkusza. */
+  action?: boolean;
   /** Własny nagłówek zamiast tytułu (np. Anuluj / Zapisz). */
   header?: HTMLElement;
   content: HTMLElement | (HTMLElement | null | false | undefined)[];
@@ -34,8 +46,34 @@ export function openSheet(opts: SheetOptions): SheetHandle {
 
   const overlay = h('div', { class: 'sheet-overlay' });
   const grab = h('div', { class: 'sheet-grab', 'aria-hidden': 'true' }, h('div', { class: 'sheet-handle' }));
+  let close: () => Promise<void> = () => Promise.resolve();
   const header =
-    opts.header ?? (opts.title ? h('div', { class: 'sheet-header' }, h('h2', { class: 'sheet-title' }, opts.title)) : null);
+    opts.header ??
+    (opts.title && !opts.action
+      ? h(
+          'div',
+          { class: 'sheet-header' },
+          h(
+            'div',
+            { class: 'sheet-header-main' },
+            opts.leading,
+            h(
+              'div',
+              { style: 'min-width:0' },
+              opts.eyebrow && h('p', { class: 'sheet-eyebrow' }, opts.eyebrow),
+              h(
+                'div',
+                { class: 'hist-name-row' },
+                h('h2', { class: 'sheet-title' }, opts.title),
+                opts.titleAside,
+              ),
+              opts.subtitle && h('p', { class: 'sheet-sub' }, opts.subtitle),
+            ),
+          ),
+          opts.closeButton !== false &&
+            h('button', { class: 'round-btn round-btn-sm', 'aria-label': 'Zamknij', onclick: () => close() }, icon('close', 16)),
+        )
+      : null);
   const body = h('div', { class: 'sheet-body' }, Array.isArray(opts.content) ? opts.content.filter(Boolean) : opts.content);
   const sheet = h(
     'div',
@@ -46,10 +84,10 @@ export function openSheet(opts: SheetOptions): SheetHandle {
       'aria-label': opts.title ?? 'Okno',
       tabindex: '-1',
     },
-    h('div', { class: 'sheet-drag' }, grab, header),
+    opts.action ? null : h('div', { class: 'sheet-drag' }, grab, header),
     body,
   );
-  const root = h('div', { class: 'sheet-root', dataset: { state: 'closed' } }, overlay, sheet);
+  const root = h('div', { class: `sheet-root${opts.action ? ' action-root' : ''}`, dataset: { state: 'closed' } }, overlay, sheet);
   host.append(root);
 
   let closed = false;
@@ -79,6 +117,7 @@ export function openSheet(opts: SheetOptions): SheetHandle {
     },
   };
   stack.push(handle);
+  close = handle.close;
 
   // Wymuś styl początkowy, potem stan otwarty: transition z translateY(100%) do 0.
   void sheet.offsetHeight;
@@ -89,7 +128,8 @@ export function openSheet(opts: SheetOptions): SheetHandle {
     if (!opts.guarded?.()) handle.close();
   });
 
-  attachDrag(sheet.querySelector('.sheet-drag') as HTMLElement, sheet, overlay, handle, opts.guarded);
+  const dragZone = sheet.querySelector<HTMLElement>('.sheet-drag');
+  if (dragZone) attachDrag(dragZone, sheet, overlay, handle, opts.guarded);
   return handle;
 }
 
@@ -164,6 +204,7 @@ function attachDrag(
 
 interface ConfirmOptions {
   title: string;
+  eyebrow?: string;
   message?: string | HTMLElement;
   confirmLabel: string;
   cancelLabel?: string;
@@ -173,32 +214,49 @@ interface ConfirmOptions {
 export function confirmSheet(opts: ConfirmOptions): Promise<boolean> {
   return new Promise((resolve) => {
     let result = false;
-    const confirmBtn = h(
-      'button',
-      {
-        class: `btn btn-block ${opts.danger ? 'btn-danger' : 'btn-primary'}`,
-        onclick: () => {
-          result = true;
-          sheet.close();
-        },
-      },
-      opts.confirmLabel,
-    );
-    const cancelBtn = h(
-      'button',
-      { class: 'btn btn-block btn-secondary', onclick: () => sheet.close() },
-      opts.cancelLabel ?? 'Anuluj',
-    );
-    const sheet = openSheet({
+    let sheet: SheetHandle;
+    const confirm = () => {
+      result = true;
+      void sheet.close();
+    };
+    // Destrukcyjne potwierdzenia: arkusz akcji iOS (grupa + osobne „Anuluj” pod spodem).
+    if (opts.danger && (typeof opts.message === 'string' || !opts.message)) {
+      sheet = openSheet({
+        title: opts.title,
+        action: true,
+        content: [
+          h(
+            'div',
+            { class: 'action-group', role: 'alertdialog', 'aria-label': opts.title },
+            h(
+              'div',
+              { class: 'action-head' },
+              h('p', { class: 'action-title' }, opts.title),
+              opts.message ? h('p', { class: 'action-text' }, opts.message as string) : null,
+            ),
+            h('button', { class: 'action-btn is-danger', onclick: confirm }, opts.confirmLabel),
+          ),
+          h('button', { class: 'action-btn action-cancel', onclick: () => sheet.close() }, opts.cancelLabel ?? 'Anuluj'),
+        ],
+        onClose: () => resolve(result),
+      });
+      return;
+    }
+    sheet = openSheet({
       title: opts.title,
-      className: 'sheet-confirm',
+      eyebrow: opts.eyebrow,
       content: [
         opts.message
           ? typeof opts.message === 'string'
             ? h('p', { class: 'sheet-text' }, opts.message)
             : opts.message
-          : h('span'),
-        h('div', { class: 'sheet-actions' }, confirmBtn, cancelBtn),
+          : null,
+        h(
+          'div',
+          { class: 'sheet-actions' },
+          h('button', { class: `btn btn-block ${opts.danger ? 'btn-danger' : 'btn-primary'}`, onclick: confirm }, opts.confirmLabel),
+          h('button', { class: 'btn btn-block btn-gray', onclick: () => sheet.close() }, opts.cancelLabel ?? 'Anuluj'),
+        ),
       ],
       onClose: () => resolve(result),
     });
