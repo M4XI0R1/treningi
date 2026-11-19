@@ -6,6 +6,8 @@ export const DEFAULT_SETTINGS: Settings = {
   barKg: 20,
   plates: [25, 20, 15, 10, 5, 2.5, 1.25],
   lastExportAt: null,
+  theme: 'categories',
+  weeklyGoal: 4,
 };
 
 export const REST_OPTIONS = [60, 90, 120, 150, 180, 240];

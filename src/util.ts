@@ -66,6 +66,17 @@ const ICONS: Record<string, string> = {
   trophy: 'M8 4h8v5a4 4 0 0 1-8 0V4zM8 6H5v1a3 3 0 0 0 3 3M16 6h3v1a3 3 0 0 1-3 3M12 13v4M8.5 20h7',
   timer: 'M12 8v5l3 2M9 2h6M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16z',
   note: 'M5 4h14v16H5zM8.5 9h7M8.5 13h7M8.5 17h4',
+  clock: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3.5 2',
+  trend: 'M3 17l6-6 4 4 8-8M17 7h4v4',
+  plan: 'M8 4h8a4 4 0 0 1 4 4v8a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V8a4 4 0 0 1 4-4zM8 9h8M8 12.5h8M8 16h5',
+  arrowUp: 'M12 19V5M5 12l7-7 7 7',
+  arrowDown: 'M12 5v14M19 12l-7 7-7-7',
+  bolt: 'M13 2L3 14h9l-1 8 10-12h-9l1-8z',
+  star: 'M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z',
+  chevronDown: 'M6 9l6 6 6-6',
+  chevronUp: 'M6 15l6-6 6 6',
+  backup: 'M12 3v12M7 10l5 5 5-5M5 21h14',
+  play: 'M8 5.5v13l10.5-6.5z',
 };
 
 export function icon(name: keyof typeof ICONS | string, size = 22): SVGSVGElement {
@@ -75,7 +86,7 @@ export function icon(name: keyof typeof ICONS | string, size = 22): SVGSVGElemen
       viewBox: '0 0 24 24',
       width: size,
       height: size,
-      fill: 'none',
+      fill: name === 'play' ? 'currentColor' : 'none',
       stroke: 'currentColor',
       'stroke-width': name === 'more' ? 3.4 : 2,
       'stroke-linecap': 'round',

@@ -348,6 +348,8 @@ export function parseImport(text: string): AppData {
         ? [...s.plates].sort((a, b) => b - a)
         : [...DEFAULT_SETTINGS.plates],
     lastExportAt: isNum(s.lastExportAt) ? s.lastExportAt : null,
+    theme: s.theme === 'warm' || s.theme === 'sage' ? s.theme : 'categories',
+    weeklyGoal: int(s.weeklyGoal, 1, 7, DEFAULT_SETTINGS.weeklyGoal!),
   };
 
   return migrate({ exercises, plans, settings, workouts, bodyweight }, schema);

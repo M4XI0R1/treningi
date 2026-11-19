@@ -72,11 +72,17 @@ export interface BodyWeight {
   kg: number;
 }
 
+export type ThemeKey = 'categories' | 'warm' | 'sage';
+
 export interface Settings {
   restSeconds: number;
   barKg: number;
   plates: number[];
   lastExportAt: number | null;
+  /** Wariant kolorystyczny (Soft Alabaster). */
+  theme?: ThemeKey;
+  /** Cel: liczba treningów w tygodniu (pierścień na ekranie Trening). */
+  weeklyGoal?: number;
 }
 
 export interface AppData {
