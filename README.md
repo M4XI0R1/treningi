@@ -14,6 +14,12 @@ Adres: **https://m4xi0r1.github.io/treningi/**
 > **Uwaga: usunięcie ikony z ekranu początkowego kasuje wszystkie dane aplikacji.**
 > Dane z ikony i z karty Safari to dwa osobne magazyny. Zanim usuniesz ikonę albo zmienisz telefon, zrób eksport (niżej).
 
+## Wygląd
+
+Jasny motyw „Soft Alabaster” w stylu iOS. W **Plan → Ustawienia → Wygląd** są trzy warianty kolorów: kolorowe kategorie (domyślny), ciepły alabaster i szałwia z grafitem. Tam też ustawisz cel treningów w tygodniu (pierścień na ekranie Trening).
+
+> Jeśli po aktualizacji do jasnego wyglądu zegar i bateria u góry ekranu są białe i niewidoczne, iOS zapamiętał styl paska statusu z chwili instalacji. Wtedy: **eksport kopii → usuń ikonę → dodaj ponownie z Safari → import kopii**. Bez eksportu usunięcie ikony skasuje dane.
+
 ## Kopia zapasowa
 
 Zakładka **Plan → Kopia zapasowa**:

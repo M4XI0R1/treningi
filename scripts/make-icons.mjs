@@ -1,10 +1,10 @@
-// Generuje ikony aplikacji (PNG) bez zależności: ciemne tło, limonkowe hantle.
+// Generuje ikony aplikacji (PNG) bez zależności: grafitowe tło (Obsidian Ink), białe hantle.
 // Uruchom: npm run icons
 import { deflateSync } from 'node:zlib';
 import { writeFileSync, mkdirSync } from 'node:fs';
 
-const BG = [0x0e, 0x10, 0x14];
-const FG = [0xc6, 0xf2, 0x4e];
+const BG = [0x1c, 0x1c, 0x1e];
+const FG = [0xff, 0xff, 0xff];
 
 // Kształty w jednostkach 0..1 (środek ikony = 0.5). Całość mieści się w kole
 // o promieniu 0.32, więc zostaje w bezpiecznej strefie maski (r = 0.4).
