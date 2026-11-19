@@ -16,16 +16,29 @@ import {
   saveSettings,
   state,
 } from '../store';
-import { MUSCLES, type AppData, type Muscle, type Plan } from '../types';
+import { MUSCLES, type AppData, type Muscle, type Plan, type ThemeKey } from '../types';
+import { catBadge, planCategory } from '../ui/category';
+import { applyTheme } from '../ui/theme';
 import { confirmSheet, openSheet } from '../ui/sheet';
 import { toast } from '../ui/toast';
 import { W, clamp, fmtClock, fmtDate, fmtKg, fmtNum, fmtRelDay, h, icon, parseNum, plural, uid } from '../util';
 
 declare const __BUILD__: string;
 
+const THEMES: { key: ThemeKey; label: string; colors: string[] }[] = [
+  { key: 'categories', label: 'Kolorowe kategorie', colors: ['#34C759', '#E05A47', '#4A65D6'] },
+  { key: 'warm', label: 'Ciepły alabaster', colors: ['#D98218', '#EAB308'] },
+  { key: 'sage', label: 'Szałwia i grafit', colors: ['#238A63', '#1C1C1E'] },
+];
+
 export function renderPlan(root: HTMLElement) {
   root.append(
-    h('header', { class: 'page-header' }, h('h1', { class: 'page-title' }, 'Plan')),
+    h(
+      'header',
+      { class: 'page-header' },
+      h('h1', { class: 'page-title' }, 'Plan'),
+      h('button', { class: 'btn btn-primary btn-sm', onclick: () => openEditor(null) }, icon('plus', 18), 'Nowy'),
+    ),
     plansSection(),
     settingsSection(),
     backupSection(),
@@ -42,8 +55,16 @@ function section(title: string, ...children: (Node | null | false)[]) {
 // =====================================================================
 
 function plansSection() {
-  return section(
-    'Treningi',
+  return h(
+    'section',
+    { class: 'section', style: 'margin-top:4px' },
+    h(
+      'div',
+      { class: 'section-head' },
+      h('h2', { class: 'section-title' }, 'Treningi'),
+      state.plans.length > 0 &&
+        h('span', { class: 'section-aside num' }, `${plural(state.plans.length, ['dzień', 'dni', 'dni'])} w rotacji`),
+    ),
     state.plans.length
       ? h(
           'div',
@@ -51,12 +72,13 @@ function plansSection() {
           state.plans.map((p, i) =>
             h(
               'button',
-              { class: 'card plan-edit-card', onclick: () => openEditor(p) },
+              { class: 'card plan-card', onclick: () => openEditor(p), 'aria-label': `Edytuj trening ${p.name}` },
               h(
                 'div',
                 { class: 'plan-card-top' },
+                catBadge(planCategory(p), 'sm'),
                 h('span', { class: 'plan-card-name' }, `${i + 1}. ${p.name || 'Bez nazwy'}`),
-                h('span', { class: 'link' }, 'Edytuj'),
+                h('span', { class: 'pill-btn' }, 'Edytuj'),
               ),
               p.exercises.length
                 ? h(
@@ -66,26 +88,25 @@ function plansSection() {
                       h(
                         'li',
                         null,
-                        h('span', { class: 'plan-row-name' }, getExercise(pe.exerciseId).name),
+                        h('span', { class: 'plan-row-name-text' }, getExercise(pe.exerciseId).name),
                         h(
                           'span',
-                          { class: 'plan-row-target num' },
+                          { class: 'plan-row-target' },
                           `${pe.sets} × ${pe.repsMin === pe.repsMax ? pe.repsMin : `${pe.repsMin}–${pe.repsMax}`}`,
                         ),
                       ),
                     ),
                   )
-                : h('span', { class: 'plan-card-meta' }, 'Brak ćwiczeń'),
+                : h('p', { class: 'plan-row-meta' }, 'Brak ćwiczeń'),
             ),
           ),
         )
-      : h('div', { class: 'card empty-card' }, h('p', { class: 'empty-text' }, 'Plan jest pusty.')),
-    h(
-      'button',
-      { class: 'btn btn-block btn-secondary mt-12', onclick: () => openEditor(null) },
-      icon('plus', 20),
-      'Nowy trening',
-    ),
+      : h(
+          'div',
+          { class: 'card empty-card' },
+          h('p', { class: 'empty-title' }, 'Plan jest pusty'),
+          h('p', { class: 'empty-text' }, 'Dodaj pierwszy trening przyciskiem „Nowy”.'),
+        ),
     h('p', { class: 'footnote' }, 'Kolejność ustala rotację: „Następny” to trening po ostatnio wykonanym.'),
   );
 }
@@ -488,7 +509,49 @@ function settingsSection() {
     h(
       'div',
       { class: 'card' },
-      h('p', { class: 'field-label' }, 'Czas przerwy'),
+      h('p', { class: 'field-label' }, 'Wygląd'),
+      h(
+        'div',
+        { class: 'theme-options' },
+        THEMES.map((t) =>
+          h(
+            'button',
+            {
+              class: `theme-option${(s.theme ?? 'categories') === t.key ? ' is-active' : ''}`,
+              'aria-pressed': String((s.theme ?? 'categories') === t.key),
+              onclick: () => {
+                s.theme = t.key;
+                applyTheme();
+                void saveSettings();
+                app.rerender();
+              },
+            },
+            h('span', { class: 'theme-swatches', 'aria-hidden': 'true' }, t.colors.map((c) => h('span', { style: `background:${c}` }))),
+            t.label,
+          ),
+        ),
+      ),
+      h('p', { class: 'field-label mt-16' }, 'Cel: treningi w tygodniu'),
+      h(
+        'div',
+        { class: 'segmented' },
+        [2, 3, 4, 5, 6].map((n) =>
+          h(
+            'button',
+            {
+              class: `segment num${(s.weeklyGoal ?? 4) === n ? ' is-active' : ''}`,
+              'aria-pressed': String((s.weeklyGoal ?? 4) === n),
+              onclick: () => {
+                s.weeklyGoal = n;
+                void saveSettings();
+                app.rerender();
+              },
+            },
+            String(n),
+          ),
+        ),
+      ),
+      h('p', { class: 'field-label mt-16' }, 'Czas przerwy'),
       h(
         'div',
         { class: 'segmented segmented-3' },

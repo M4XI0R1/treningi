@@ -246,3 +246,14 @@ export function nextPlanId(): string | null {
   const idx = state.plans.findIndex((p) => p.id === last.planId);
   return state.plans[(idx + 1) % state.plans.length].id;
 }
+
+/** Szacowany czas planu w minutach: średnia z ostatnich 3 wykonań, inaczej ~2,5 min na serię. */
+export function planDuration(plan: { id: string; exercises: { sets: number }[] }): number {
+  const recent = state.workouts.filter((w) => w.planId === plan.id).slice(0, 3);
+  if (recent.length) {
+    const avg = recent.reduce((s, w) => s + (w.endedAt - w.startedAt), 0) / recent.length / 60_000;
+    return Math.max(5, Math.round(avg / 5) * 5);
+  }
+  const sets = plan.exercises.reduce((n, e) => n + e.sets, 0);
+  return Math.max(10, Math.round((sets * 2.5 + 5) / 5) * 5);
+}

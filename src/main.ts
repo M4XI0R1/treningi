@@ -3,7 +3,8 @@ import { app, type Tab } from './app';
 import { initRest, syncRest } from './rest';
 import { events, flushDraft, load, state } from './store';
 import { toast } from './ui/toast';
-import { h, icon, reducedMotion } from './util';
+import { fmtClock, h, icon, reducedMotion } from './util';
+import { applyTheme } from './ui/theme';
 import { renderHistory } from './views/history';
 import { renderPlan } from './views/plan';
 import { renderProgress } from './views/progress';
@@ -11,9 +12,9 @@ import { renderTraining } from './views/workout';
 
 const TABS: { id: Tab; label: string; icon: string; render: (root: HTMLElement) => void }[] = [
   { id: 'trening', label: 'Trening', icon: 'dumbbell', render: renderTraining },
-  { id: 'historia', label: 'Historia', icon: 'history', render: renderHistory },
-  { id: 'progres', label: 'Progres', icon: 'chart', render: renderProgress },
-  { id: 'plan', label: 'Plan', icon: 'list', render: renderPlan },
+  { id: 'historia', label: 'Historia', icon: 'clock', render: renderHistory },
+  { id: 'progres', label: 'Progres', icon: 'trend', render: renderProgress },
+  { id: 'plan', label: 'Plan', icon: 'plan', render: renderPlan },
 ];
 
 const main = document.getElementById('main')!;
@@ -34,7 +35,39 @@ function render(scrollTop: number) {
     else btn.removeAttribute('aria-current');
   }
   navButtons.get('trening')!.classList.toggle('has-dot', !!state.draft);
+  updatePill();
 }
+
+// ---------- Pigułka „Trening w toku” (na innych zakładkach) ----------
+
+const pill = h('button', { class: 'session-pill', hidden: true, onclick: () => app.go('trening') });
+const pillTitle = h('span', null);
+const pillTime = h('span', { class: 'num' });
+pill.append(
+  h('span', { class: 'session-pill-title' }, h('span', { class: 'status-dot' }), pillTitle),
+  h('span', { class: 'session-pill-right' }, pillTime, h('span', { class: 'session-pill-go' }, 'Wróć ›')),
+);
+document.body.append(pill);
+
+function updatePill() {
+  const d = state.draft;
+  // Pasek przerwy ma pierwszeństwo: dwa pływające paski naraz to za dużo.
+  const show = !!d && app.tab !== 'trening' && !document.body.classList.contains('has-rest');
+  document.body.classList.toggle('has-pill', show);
+  if (show) {
+    pillTitle.textContent = `Trening ${d!.name} w toku`;
+    pillTime.textContent = fmtClock((Date.now() - d!.startedAt) / 1000);
+    if (pill.hidden) {
+      pill.hidden = false;
+      void pill.offsetHeight;
+    }
+    pill.dataset.state = 'open';
+  } else if (!pill.hidden) {
+    pill.dataset.state = 'closed';
+    pill.hidden = true;
+  }
+}
+setInterval(updatePill, 1000);
 
 // Przełączanie zakładek bez animacji: robi się to wiele razy na trening.
 app.go = (tab, opts) => {
@@ -112,6 +145,7 @@ async function start() {
     );
     return;
   }
+  applyTheme();
   initRest();
   render(0);
   registerServiceWorker();

@@ -21,6 +21,8 @@ const BODYWEIGHT: { id: Metric; label: string; unit: string }[] = [
 
 let selectedExercise: string | null = null;
 let metric: Metric = 'e1rm';
+/** Poprzednia pozycja kciuka segmentu, żeby po przebudowie widoku przesunął się z niej, a nie pojawił. */
+let prevSegment = 0;
 
 export function renderProgress(root: HTMLElement) {
   root.append(h('header', { class: 'page-header' }, h('h1', { class: 'page-title' }, 'Progres')));
@@ -53,7 +55,7 @@ function exerciseSection() {
   const select = h(
     'select',
     {
-      class: 'input select',
+      class: 'input select select-card',
       'aria-label': 'Ćwiczenie',
       onchange: (e: Event) => {
         selectedExercise = (e.target as HTMLSelectElement).value;
@@ -80,9 +82,19 @@ function exerciseSection() {
   const first = points[0]?.y ?? 0;
   const diff = latest - first;
 
+  const activeIdx = METRICS.findIndex((m) => m.id === key);
+  const thumb = h('div', { class: 'segmented-thumb', 'aria-hidden': 'true' });
+  const fromIdx = Math.min(prevSegment, METRICS.length - 1);
+  thumb.style.transform = `translateX(${fromIdx * 100}%)`;
+  if (fromIdx !== activeIdx) {
+    // Kciuk startuje z poprzedniego segmentu i przesuwa się do nowego (po wstawieniu do DOM).
+    requestAnimationFrame(() => requestAnimationFrame(() => (thumb.style.transform = `translateX(${activeIdx * 100}%)`)));
+  }
+  prevSegment = activeIdx;
   const seg = h(
     'div',
-    { class: 'segmented' },
+    { class: 'segmented has-thumb', style: `--n:${METRICS.length}`, role: 'group', 'aria-label': 'Miara' },
+    thumb,
     METRICS.map((m) =>
       h(
         'button',
@@ -90,6 +102,7 @@ function exerciseSection() {
           class: `segment${m.id === key ? ' is-active' : ''}`,
           'aria-pressed': String(m.id === key),
           onclick: () => {
+            if (m.id === key) return;
             metric = m.id;
             app.rerender();
           },
@@ -180,8 +193,16 @@ function muscleSection() {
   const max = Math.max(20, ...counts.values());
   const lo = 10;
   const hi = 16;
-  return section(
-    'Serie na partię · 7 dni',
+  const total = [...counts.values()].reduce((a, b) => a + b, 0);
+  return h(
+    'section',
+    { class: 'section' },
+    h(
+      'div',
+      { class: 'section-head' },
+      h('h2', { class: 'section-title' }, 'Serie na partię (7 dni)'),
+      h('span', { class: 'section-aside num' }, `Łącznie ${plural(total, W.set)}`),
+    ),
     h(
       'div',
       { class: 'card' },
@@ -195,17 +216,17 @@ function muscleSection() {
             'li',
             { class: `muscle is-${zone}` },
             h('span', { class: 'muscle-name' }, m),
+            h('span', { class: 'muscle-count num' }, plural(n, W.set)),
             h(
               'div',
               { class: 'muscle-track' },
               h('div', { class: 'muscle-band', style: `left:${(lo / max) * 100}%;width:${((hi - lo) / max) * 100}%` }),
               h('div', { class: 'muscle-bar', style: `width:${(n / max) * 100}%` }),
             ),
-            h('span', { class: 'muscle-count num' }, String(n)),
           );
         }),
       ),
-      h('p', { class: 'footnote' }, 'Pole w tle: 10–16 serii roboczych w tygodniu. Rozgrzewki się nie liczą.'),
+      h('p', { class: 'footnote' }, 'Jasne pole na pasku: 10–16 serii roboczych w tygodniu. Rozgrzewki się nie liczą.'),
     ),
   );
 }
