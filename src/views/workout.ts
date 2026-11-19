@@ -1,7 +1,8 @@
 import { app } from '../app';
 import { addRest, skipRest, startRest, syncRest, unlockAudio } from '../rest';
 import { REST_OPTIONS } from '../defaults';
-import { draftPRs, e1rm, lastDoneByPlan, lastSets, nextPlanId, workoutTotals } from '../stats';
+import { draftPRs, e1rm, lastDoneByPlan, lastSets, nextPlanId, planDuration, workoutTotals } from '../stats';
+import { type Category, catBadge, categoryOf, planCategory } from '../ui/category';
 import {
   LIMITS,
   cleanName,
@@ -33,6 +34,8 @@ import {
   parseNum,
   plural,
   round,
+  startOfWeek,
+  svg,
   uid,
 } from '../util';
 
@@ -52,75 +55,294 @@ function renderPlans(root: HTMLElement) {
   const lastByPlan = lastDoneByPlan();
   const exportAge = state.settings.lastExportAt ? Date.now() - state.settings.lastExportAt : Infinity;
   const needsBackup = state.workouts.length > 0 && exportAge > 14 * DAY;
+  const nextPlan = state.plans.find((p) => p.id === next) ?? null;
+  const others = state.plans.filter((p) => p !== nextPlan);
 
   root.append(
-    h('header', { class: 'page-header' }, h('h1', { class: 'page-title' }, 'Trening')),
-    needsBackup ? h(
-        'button',
-        { class: 'banner', onclick: () => app.go('plan', { top: false }) },
-        h('span', { class: 'banner-text' },
-          h('strong', null, 'Zrób kopię zapasową'),
-          h('span', null,
-            state.settings.lastExportAt
-              ? `Ostatni eksport ${fmtRelDay(state.settings.lastExportAt)}.`
-              : 'Dane są tylko na tym telefonie.',
+    h(
+      'header',
+      { class: 'page-header' },
+      h(
+        'div',
+        { class: 'page-header-text' },
+        h('p', { class: 'eyebrow num' }, todayLabel()),
+        h('h1', { class: 'page-title' }, 'Trening'),
+      ),
+      weekRing(),
+    ),
+    needsBackup
+      ? h(
+          'button',
+          { class: 'card banner', onclick: () => app.go('plan', { top: false }) },
+          h('span', { class: 'banner-icon' }, icon('backup', 18)),
+          h(
+            'span',
+            { class: 'banner-text' },
+            h('strong', null, 'Zrób kopię zapasową'),
+            h(
+              'span',
+              null,
+              state.settings.lastExportAt
+                ? `Ostatni eksport ${fmtRelDay(state.settings.lastExportAt)}.`
+                : 'Dane są tylko na tym telefonie.',
+            ),
           ),
-        ),
-        icon('chevron', 18),
-      ) : '',
-    state.plans.length
+          icon('chevron', 18),
+        )
+      : '',
+    nextPlan ? heroCard(nextPlan, lastByPlan.get(nextPlan.id)) : '',
+    state.plans.length === 0
       ? h(
           'div',
-          { class: 'stack' },
-          state.plans.map((plan) => planCard(plan, plan.id === next, lastByPlan.get(plan.id))),
-        )
-      : h(
-          'div',
-          { class: 'empty' },
+          { class: 'card empty-card' },
           h('p', { class: 'empty-title' }, 'Brak treningów w planie'),
           h('p', { class: 'empty-text' }, 'Dodaj trening w zakładce Plan albo zacznij pusty trening.'),
-          h('button', { class: 'btn btn-secondary', onclick: () => app.go('plan') }, 'Przejdź do planu'),
-        ),
+          h('button', { class: 'btn btn-gray btn-sm mt-12', onclick: () => app.go('plan') }, 'Przejdź do planu'),
+        )
+      : '',
+    others.length
+      ? h(
+          'section',
+          { 'aria-label': 'Pozostałe treningi' },
+          h(
+            'div',
+            { class: 'section-head' },
+            h('h2', { class: 'section-title' }, nextPlan ? 'Pozostałe treningi' : 'Treningi'),
+            h('span', { class: 'section-aside' }, plural(others.length, ['plan', 'plany', 'planów'])),
+          ),
+          h('div', { class: 'stack' }, others.map((plan) => planRow(plan, lastByPlan.get(plan.id)))),
+        )
+      : '',
     h(
       'button',
       { class: 'btn btn-block btn-secondary mt-16', onclick: () => startWorkout(null) },
       icon('plus', 20),
       'Pusty trening',
     ),
-    weekSummary() ?? '',
   );
 }
 
-function weekSummary() {
-  const weekAgo = Date.now() - 7 * DAY;
-  const n = state.workouts.filter((w) => w.startedAt >= weekAgo).length;
-  if (!state.workouts.length) return null;
-  return h('p', { class: 'footnote' }, `Ostatnie 7 dni: ${plural(n, W.workout)}.`);
+function todayLabel() {
+  return new Date().toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'short' }).replace('.', '');
 }
 
-function planCard(plan: Plan, isNext: boolean, lastDone: number | undefined) {
+/** Pierścień celu tygodnia (pon.–niedz.) z wyskakującym podsumowaniem dni. */
+function weekRing() {
+  const goal = state.settings.weeklyGoal ?? 4;
+  const weekStart = startOfWeek(Date.now());
+  const done = new Set<number>();
+  let count = 0;
+  for (const w of state.workouts) {
+    if (w.startedAt < weekStart) break;
+    count++;
+    done.add((new Date(w.startedAt).getDay() + 6) % 7);
+  }
+  const today = (new Date().getDay() + 6) % 7;
+  const r = 12;
+  const len = 2 * Math.PI * r;
+  const progress = Math.min(1, count / goal);
+  const gradId = `ring-grad-${Math.random().toString(36).slice(2, 7)}`;
+  const ringSvg = svg(
+    'svg',
+    { class: 'ring-svg', width: 30, height: 30, viewBox: '0 0 32 32', 'aria-hidden': 'true' },
+    svg(
+      'defs',
+      {},
+      svg(
+        'linearGradient',
+        { id: gradId, x1: '0%', y1: '0%', x2: '100%', y2: '100%' },
+        svg('stop', { offset: '0%', 'stop-color': 'var(--ring-start)' }),
+        svg('stop', { offset: '100%', 'stop-color': 'var(--ring-end)' }),
+      ),
+    ),
+    svg('circle', { cx: 16, cy: 16, r, fill: 'none', stroke: 'var(--ring-track)', 'stroke-width': 3.6 }),
+    progress > 0 &&
+      svg('circle', {
+        cx: 16,
+        cy: 16,
+        r,
+        fill: 'none',
+        stroke: `url(#${gradId})`,
+        'stroke-width': 3.6,
+        'stroke-linecap': 'round',
+        'stroke-dasharray': len.toFixed(2),
+        'stroke-dashoffset': (len * (1 - progress)).toFixed(2),
+      }),
+  );
+
+  const popover = h(
+    'div',
+    { class: 'popover', role: 'dialog', 'aria-label': 'Ten tydzień', dataset: { open: 'false' } },
+    h('p', { class: 'popover-title num' }, `Ten tydzień: ${plural(count, W.workout)} · cel: ${goal}`),
+    h(
+      'div',
+      { class: 'week-days' },
+      ['Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'Sb', 'Nd'].map((d, i) =>
+        h(
+          'div',
+          { class: `week-day${i === today ? ' is-today' : ''}` },
+          h('span', null, d),
+          h('span', { class: `week-mark${done.has(i) ? ' is-done' : ''}` }, done.has(i) ? '✓' : i < today ? '–' : ''),
+        ),
+      ),
+    ),
+    h('p', { class: 'footnote' }, 'Cel zmienisz w zakładce Plan → Ustawienia.'),
+  );
+  const btn = h(
+    'button',
+    {
+      class: 'ring-btn',
+      'aria-expanded': 'false',
+      'aria-label': `Cel tygodnia: ${count} z ${goal}. Pokaż dni.`,
+    },
+    h('span', { class: 'ring' }, ringSvg, icon('bolt', 11)),
+    h(
+      'span',
+      { class: 'ring-text' },
+      h('span', { class: 'ring-value num' }, `${count}/${goal} tyg.`),
+      h('span', { class: 'ring-label' }, 'Cel tygodnia'),
+    ),
+  );
+  const setOpen = (open: boolean) => {
+    popover.dataset.open = String(open);
+    btn.setAttribute('aria-expanded', String(open));
+  };
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    setOpen(popover.dataset.open !== 'true');
+  });
+  const outside = (e: Event) => {
+    if (!btn.isConnected) return document.removeEventListener('pointerdown', outside);
+    if (!popover.contains(e.target as Node) && !btn.contains(e.target as Node)) setOpen(false);
+  };
+  document.addEventListener('pointerdown', outside);
+  return h('div', { class: 'ring-wrap' }, btn, popover);
+}
+
+function lastLabel(lastDone: number | undefined) {
+  return lastDone ? `ostatnio ${fmtRelDay(lastDone)}` : 'jeszcze nie robiony';
+}
+
+function heroCard(plan: Plan, lastDone: number | undefined) {
+  const cat = planCategory(plan);
+  const names = plan.exercises.map((pe) => getExercise(pe.exerciseId).name);
+  const shown = names.slice(0, 2);
+  const more = names.length - shown.length;
+  const dur = planDuration(plan);
+  return h(
+    'section',
+    {
+      class: 'card hero',
+      'aria-label': 'Następny trening',
+    },
+    h(
+      'div',
+      { class: 'hero-top' },
+      h('span', { class: 'status-pill' }, h('span', { class: 'status-dot' }), 'Następny trening'),
+      h('span', { class: 'hero-aside num' }, `${plural(plan.exercises.length, W.exercise)} · ~${dur} min`),
+    ),
+    h(
+      'div',
+      { class: 'hero-main' },
+      catBadge(cat, 'lg'),
+      h(
+        'div',
+        { style: 'min-width:0' },
+        h('h2', { class: 'hero-name' }, plan.name || 'Bez nazwy'),
+        h('p', { class: 'hero-meta num' }, lastLabel(lastDone).replace(/^./, (c) => c.toUpperCase())),
+      ),
+    ),
+    names.length > 0 &&
+      h(
+        'div',
+        { class: 'chips-row' },
+        shown.map((n) => h('span', { class: 'ex-chip' }, n)),
+        more > 0 &&
+          h(
+            'button',
+            { class: 'ex-chip ex-chip-more', onclick: () => planPreview(plan, true, lastDone) },
+            `+${more} więcej`,
+          ),
+      ),
+    h(
+      'button',
+      { class: 'btn btn-block btn-primary', onclick: () => startWorkout(plan) },
+      icon('play', 16),
+      'Rozpocznij trening',
+    ),
+  );
+}
+
+function planRow(plan: Plan, lastDone: number | undefined) {
   const names = plan.exercises.map((pe) => getExercise(pe.exerciseId).name);
   return h(
     'button',
     {
-      class: `card plan-card${isNext ? ' is-next' : ''}`,
-      onclick: () => startWorkout(plan),
-      'aria-label': `Zacznij trening ${plan.name}`,
+      class: 'card plan-row',
+      onclick: () => planPreview(plan, false, lastDone),
+      'aria-label': `${plan.name}: podgląd i start`,
     },
-    h(
-      'div',
-      { class: 'plan-card-top' },
-      h('span', { class: 'plan-card-name' }, plan.name || 'Bez nazwy'),
-      isNext && h('span', { class: 'badge badge-accent' }, 'Następny'),
-    ),
+    catBadge(planCategory(plan)),
     h(
       'span',
-      { class: 'plan-card-meta' },
-      `${plural(plan.exercises.length, W.exercise)} · ${lastDone ? `ostatnio ${fmtRelDay(lastDone)}` : 'jeszcze nie robiony'}`,
+      { class: 'plan-row-body' },
+      h(
+        'span',
+        { class: 'plan-row-top' },
+        h('span', { class: 'plan-row-name' }, plan.name || 'Bez nazwy'),
+        h('span', { class: 'plan-row-time num' }, `~${planDuration(plan)} min`),
+      ),
+      h('span', { class: 'plan-row-meta', style: 'display:block' }, `${plural(plan.exercises.length, W.exercise)} · ${lastLabel(lastDone)}`),
+      names.length > 0 && h('span', { class: 'plan-row-list', style: 'display:block' }, names.join(' · ')),
     ),
-    names.length > 0 && h('span', { class: 'plan-card-list' }, names.join(' · ')),
-    h('span', { class: 'plan-card-go' }, 'Start', icon('chevron', 18)),
+    icon('chevron', 18),
   );
+}
+
+/** Podgląd planu przed startem: chroni przed przypadkowym rozpoczęciem treningu. */
+function planPreview(plan: Plan, isNext: boolean, lastDone: number | undefined) {
+  const sets = plan.exercises.reduce((n, pe) => n + pe.sets, 0);
+  const sheet = openSheet({
+    title: plan.name || 'Bez nazwy',
+    subtitle: lastLabel(lastDone).replace(/^./, (c) => c.toUpperCase()),
+    leading: catBadge(planCategory(plan), 'lg'),
+    titleAside: isNext ? h('span', { class: 'badge badge-accent badge-sm' }, 'NASTĘPNY') : null,
+    content: [
+      h(
+        'div',
+        { class: 'stat-grid' },
+        stat('Ćwiczenia', fmtNum(plan.exercises.length)),
+        stat('Serie', fmtNum(sets)),
+        stat('Szac. czas', `~${planDuration(plan)} min`),
+      ),
+      plan.exercises.length
+        ? h(
+            'ul',
+            { class: 'card rows-card' },
+            plan.exercises.map((pe) =>
+              h(
+                'li',
+                null,
+                h('span', { class: 'row-name' }, getExercise(pe.exerciseId).name),
+                h('span', { class: 'row-target' }, `${pe.sets} × ${pe.repsMin === pe.repsMax ? pe.repsMin : `${pe.repsMin}–${pe.repsMax}`}`),
+              ),
+            ),
+          )
+        : h('p', { class: 'sheet-text' }, 'Ten trening nie ma jeszcze ćwiczeń. Dodasz je w trakcie.'),
+      h(
+        'button',
+        {
+          class: 'btn btn-block btn-primary',
+          onclick: () => {
+            void sheet.close();
+            startWorkout(plan);
+          },
+        },
+        icon('play', 16),
+        'Rozpocznij trening',
+      ),
+    ],
+  });
 }
 
 function startWorkout(plan: Plan | null) {
@@ -170,7 +392,8 @@ function renderActive(root: HTMLElement, draft: Draft) {
   }, 1000);
 
   const list = h('div', { class: 'stack' });
-  const ctx: CardCtx = { draft, list, updateStats };
+  const cat = categoryOf(draft.planId, draft.name);
+  const ctx: CardCtx = { draft, list, updateStats, cat };
   for (const we of draft.exercises) list.append(exerciseCard(ctx, we));
 
   const note = h('textarea', {
@@ -192,13 +415,18 @@ function renderActive(root: HTMLElement, draft: Draft) {
       h(
         'div',
         { class: 'workout-header-text' },
-        h('h1', { class: 'workout-title' }, draft.name),
+        h(
+          'div',
+          { class: 'workout-title-row' },
+          h('h1', { class: 'workout-title' }, draft.name),
+          h('span', { class: `cat-dot cat-${cat}`, 'aria-hidden': 'true' }),
+        ),
         h('p', { class: 'workout-sub' }, time, stats),
       ),
       h(
         'button',
-        { class: 'icon-btn', 'aria-label': 'Opcje treningu', onclick: () => workoutMenu(draft) },
-        icon('more'),
+        { class: 'round-btn', 'aria-label': 'Opcje treningu', onclick: () => workoutMenu(draft) },
+        icon('more', 18),
       ),
       h('button', { class: 'btn btn-primary btn-sm', onclick: () => finishFlow(draft) }, 'Zakończ'),
     ),
@@ -227,17 +455,29 @@ function renderActive(root: HTMLElement, draft: Draft) {
 }
 
 interface CardCtx {
+  cat: Category;
   draft: Draft;
   list: HTMLElement;
   updateStats: () => void;
 }
 
 /** Podpowiedź z poprzedniego treningu: seria o tym samym numerze, potem ostatnia. */
+/**
+ * Podpowiedź dla serii: ta sama seria (licząc osobno robocze i rozgrzewkowe) z poprzedniego treningu,
+ * potem poprzednia wpisana seria tego samego rodzaju, na końcu ostatnia seria tego rodzaju z poprzedniego razu.
+ */
 function hintFor(prev: SetEntry[] | null, we: WorkoutExercise, index: number): SetEntry | null {
-  if (prev?.[index]) return prev[index];
-  const before = we.sets.slice(0, index).reverse().find((s) => s.done || s.weight !== null || s.reps !== null);
+  const current = we.sets[index];
+  const sameKind = (s: SetEntry) => s.warmup === current.warmup;
+  const nth = we.sets.slice(0, index).filter(sameKind).length;
+  const prevSame = prev?.filter(sameKind) ?? [];
+  if (prevSame[nth]) return prevSame[nth];
+  const before = we.sets
+    .slice(0, index)
+    .reverse()
+    .find((s) => sameKind(s) && (s.done || s.weight !== null || s.reps !== null));
   if (before) return before;
-  return prev?.[prev.length - 1] ?? null;
+  return prevSame[prevSame.length - 1] ?? null;
 }
 
 function exerciseCard(ctx: CardCtx, we: WorkoutExercise): HTMLElement {
@@ -271,7 +511,7 @@ function exerciseCard(ctx: CardCtx, we: WorkoutExercise): HTMLElement {
         'div',
         { class: 'ex-head-text' },
         h('h2', { class: 'ex-name' }, ex.name),
-        h('p', { class: 'ex-meta' }, [ex.muscle, we.target].filter(Boolean).join(' · ')),
+        h('span', { class: `ex-chip-muscle cat-${ctx.cat}` }, [ex.muscle, we.target].filter(Boolean).join(' · ')),
       ),
       h(
         'button',
@@ -573,7 +813,7 @@ function addExerciseSheet(ctx: CardCtx) {
     'aria-label': 'Nazwa ćwiczenia',
   });
   const results = h('div', { class: 'menu' });
-  const createBox = h('div', { class: 'create-box', hidden: true });
+  const createBox = h('div', { class: 'card create-box', hidden: true });
 
   const add = (exerciseId: string) => {
     const we: WorkoutExercise = { id: uid(), exerciseId, sets: [emptySet(), emptySet(), emptySet()] };
@@ -762,17 +1002,31 @@ async function finishFlow(draft: Draft) {
   );
   const duration = Date.now() - draft.startedAt;
   const prs = draftPRs(draft.exercises).size;
+  const totalSets = draft.exercises.reduce((n, e) => n + e.sets.filter((x) => !x.warmup).length, 0);
+  const note = draft.note.trim();
   const msg = h(
     'div',
     { class: 'summary' },
     h(
       'div',
-      { class: 'summary-grid' },
-      stat('Czas', fmtDuration(duration)),
-      stat('Serie', fmtNum(t.sets)),
+      { class: 'stat-grid' },
+      stat('Czas trwania', fmtDuration(duration)),
+      stat('Ukończone serie', `${fmtNum(t.sets)} / ${fmtNum(Math.max(t.sets, totalSets))}`),
       stat('Objętość', fmtKg(Math.round(t.volume))),
-      stat('Rekordy', fmtNum(prs)),
     ),
+    prs > 0 &&
+      h(
+        'p',
+        { class: 'sheet-text' },
+        `${plural(prs, ['nowy rekord', 'nowe rekordy', 'nowych rekordów'])} w tym treningu.`,
+      ),
+    note &&
+      h(
+        'div',
+        { class: 'card note-box' },
+        h('p', { class: 'sheet-eyebrow' }, 'Notatka do treningu'),
+        h('p', null, note),
+      ),
     skipped > 0 &&
       h(
         'p',
@@ -781,10 +1035,11 @@ async function finishFlow(draft: Draft) {
       ),
   );
   const ok = await confirmSheet({
-    title: 'Zakończyć trening?',
+    eyebrow: 'Podsumowanie sesji',
+    title: `Trening ${draft.name}`,
     message: msg,
-    confirmLabel: 'Zapisz trening',
-    cancelLabel: 'Wróć do treningu',
+    confirmLabel: 'Zapisz w historii',
+    cancelLabel: 'Wróć do wpisywania',
   });
   if (!ok || state.draft !== draft) return;
 
